@@ -1,0 +1,14 @@
+[project]
+name = "meal-planner"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "pulp>=2.8",
+    "aiohttp>=3.9",
+    "beautifulsoup4>=4.12",
+    "motor>=3.3",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]

@@ -1,9 +1,10 @@
 db = db.getSiblingDB(process.env.DB_NAME);
 
 load('/docker-entrypoint-initdb.d/schemas/ingredient_schema.js');
+load('/docker-entrypoint-initdb.d/schemas/recipe_schema.js');
 
 db.createCollection('ingredients', ingredientSchema);
-db.createCollection('recipes'); 
+db.createCollection('recipes', recipeSchema);
 
 db.createUser({
   user: process.env.READWRITE_USERNAME,

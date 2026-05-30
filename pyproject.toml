@@ -4,9 +4,10 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.111",
-    "uvicorn[standard]>=0.29",
+    "uvicorn>=0.29",
     "pulp>=2.8",
     "aiohttp>=3.9",
+    "anthropic[aiohttp]>=0.40",
     "beautifulsoup4>=4.12",
     "motor>=3.3",
     "pydantic>=2.0",

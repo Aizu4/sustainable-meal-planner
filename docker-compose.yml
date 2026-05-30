@@ -12,6 +12,7 @@ services:
       READONLY_PASSWORD: ${READONLY_PASSWORD}
     volumes:
       - ./mongodb/:/docker-entrypoint-initdb.d/:ro
+      - mongo_data:/data/db
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
@@ -26,9 +27,46 @@ services:
       mongo:
         condition: service_healthy
     ports:
-      - 8081:8081
+      - "8081:8081"
     environment:
       ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/
       ME_CONFIG_BASICAUTH_ENABLED: true
       ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME}
       ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD}
+
+  scraper:
+    build:
+      context: .
+      dockerfile: scraper/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_HOST: mongo
+      DB_NAME: ${DB_NAME}
+      READWRITE_USERNAME: ${READWRITE_USERNAME}
+      READWRITE_PASSWORD: ${READWRITE_PASSWORD}
+      SCRAPE_INTERVAL_MINUTES: ${SCRAPE_INTERVAL_MINUTES:-5}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RECIPES_OUTPUT_DIR: ${RECIPES_OUTPUT_DIR:-}
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      MONGO_HOST: mongo
+      DB_NAME: ${DB_NAME}
+      READONLY_USERNAME: ${READONLY_USERNAME}
+      READONLY_PASSWORD: ${READONLY_PASSWORD}
+
+volumes:
+  mongo_data:

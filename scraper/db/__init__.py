@@ -1,7 +1,9 @@
 import logging
+from typing import Type
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
+from pymongo import UpdateOne
 
 from shared.ingredient import IngredientRecord
 from shared.recipe import Recipe
@@ -13,25 +15,29 @@ def get_motor_client(uri: str) -> AsyncIOMotorClient:
     return AsyncIOMotorClient(uri)
 
 
+def _validate(model: Type[BaseModel], data: dict, kind: str) -> bool:
+    try:
+        model.model_validate(data)
+        return True
+    except ValidationError as exc:
+        log.error("%s %s failed Pydantic validation — skipping upsert:\n%s",
+                  kind, data.get("id"), exc)
+        return False
+
+
 async def recipe_exists(db: AsyncIOMotorDatabase, slug: str) -> bool:
     return await db.recipes.count_documents({"id": slug}, limit=1) > 0
 
 
 async def upsert_recipe(db: AsyncIOMotorDatabase, recipe: dict) -> None:
-    # First pass: Pydantic validation (Python-side)
-    try:
-        Recipe.model_validate(recipe)
-    except ValidationError as exc:
-        log.error("Recipe %s failed Pydantic validation — skipping upsert:\n%s", recipe.get("id"), exc)
+    if not _validate(Recipe, recipe, "Recipe"):
         return
-
-    # Second pass: MongoDB validator runs on write
     await db.recipes.update_one(
         {"id": recipe["id"]},
         {"$set": recipe},
         upsert=True,
     )
-    log.info("Upserted %s", recipe["id"])
+    log.info("Upserted recipe %s", recipe["id"])
 
 
 async def get_all_ingredients(db: AsyncIOMotorDatabase) -> list[dict]:
@@ -39,10 +45,7 @@ async def get_all_ingredients(db: AsyncIOMotorDatabase) -> list[dict]:
 
 
 async def upsert_ingredient(db: AsyncIOMotorDatabase, ingredient: dict) -> None:
-    try:
-        IngredientRecord.model_validate(ingredient)
-    except ValidationError as exc:
-        log.error("Ingredient %s failed validation — skipping: %s", ingredient.get("id"), exc)
+    if not _validate(IngredientRecord, ingredient, "Ingredient"):
         return
     await db.ingredients.update_one(
         {"id": ingredient["id"]},
@@ -50,3 +53,12 @@ async def upsert_ingredient(db: AsyncIOMotorDatabase, ingredient: dict) -> None:
         upsert=True,
     )
     log.info("Upserted ingredient %s", ingredient["id"])
+
+
+async def bulk_upsert_ingredients(db: AsyncIOMotorDatabase, ingredients: list[dict]) -> None:
+    valid = [ing for ing in ingredients if _validate(IngredientRecord, ing, "Ingredient")]
+    if not valid:
+        return
+    ops = [UpdateOne({"id": ing["id"]}, {"$set": ing}, upsert=True) for ing in valid]
+    await db.ingredients.bulk_write(ops, ordered=False)
+    log.info("Bulk-upserted %d ingredients", len(valid))

@@ -1,40 +1,47 @@
 import os
 from pathlib import Path
 
-import aiohttp
+from aiohttp import ClientTimeout
 
-# Load .env from project root (if present) without requiring python-dotenv
-_env_file = Path(__file__).parent.parent / ".env"
-if _env_file.exists():
-    for _line in _env_file.read_text(encoding="utf-8").splitlines():
-        _line = _line.strip()
-        if _line and not _line.startswith("#") and "=" in _line:
-            _k, _, _v = _line.partition("=")
-            os.environ.setdefault(_k.strip(), _v.strip())
+from shared.env import load_project_env
+
+load_project_env()
 
 RANDOM_ENDPOINT = "https://api.aniagotuje.pl/client/posts/random?category=&diet=&idea="
 BASE_URL = "https://aniagotuje.pl"
 
-REQUEST_CONCURRENCY = 3
-REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+REQUEST_CONCURRENCY = int(os.environ.get("REQUEST_CONCURRENCY", "3"))
+REQUEST_TIMEOUT = ClientTimeout(total=int(os.environ.get("REQUEST_TIMEOUT_SECONDS", "30")))
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
-SCRAPE_INTERVAL_MINUTES: int = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "5"))
+SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "5"))
+URL_BATCH_CALLS = int(os.environ.get("URL_BATCH_CALLS", "5"))
+MAX_PAGE_TEXT_CHARS = int(os.environ.get("MAX_PAGE_TEXT_CHARS", "10000"))
 
-DB_NAME: str = os.environ.get("DB_NAME", "sustainable_meal_planner")
+HTTP_MAX_RETRIES = int(os.environ.get("HTTP_MAX_RETRIES", "3"))
+HTTP_BACKOFF_BASE_SECONDS = float(os.environ.get("HTTP_BACKOFF_BASE_SECONDS", "1.0"))
+
+RECIPE_PARSER_MODEL = os.environ.get("RECIPE_PARSER_MODEL", "claude-sonnet-4-6")
+INGREDIENT_ENRICHER_MODEL = os.environ.get(
+    "INGREDIENT_ENRICHER_MODEL", "claude-haiku-4-5-20251001"
+)
+
+DB_NAME = os.environ.get("DB_NAME", "sustainable_meal_planner")
 _mongo_host = os.environ.get("MONGO_HOST", "mongo")
 _rw_user = os.environ.get("READWRITE_USERNAME", "readwrite")
 _rw_pass = os.environ.get("READWRITE_PASSWORD", "")
-MONGO_URI: str = f"mongodb://{_rw_user}:{_rw_pass}@{_mongo_host}:27017/{DB_NAME}"
+MONGO_URI = f"mongodb://{_rw_user}:{_rw_pass}@{_mongo_host}:27017/{DB_NAME}"
 
-# Optional: if set, JSON files are written here in addition to MongoDB
 _output_dir = os.environ.get("RECIPES_OUTPUT_DIR", "")
 RECIPES_OUTPUT_DIR: Path | None = Path(_output_dir) if _output_dir else None
 
-# Supports either ANTHROPIC_API_KEY (standard) or CLAUDE_API_KEY
-ANTHROPIC_API_KEY: str = (
+ANTHROPIC_API_KEY = (
     os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_API_KEY") or ""
 )
+if not ANTHROPIC_API_KEY:
+    raise RuntimeError(
+        "ANTHROPIC_API_KEY (or CLAUDE_API_KEY) must be set for the scraper to run."
+    )
